@@ -1,12 +1,15 @@
-# ⚡️ MarketPulse AI
+# ✨ MarketPulse AI
 
-**Intelligent E-commerce Gap Detector**
+<img src="https://img.shields.io/badge/MarketPulse_AI-Intelligent_E--commerce_Gap_Detector-blue?style=for-the-badge" />
 
 **MarketPulse AI** es una solución de *Business Intelligence* desarrollada para detectar automáticamente **Océanos Azules** (oportunidades de mercado de alta demanda y baja competencia) en Mercado Libre.
 
 ---
 
 🧑‍💻 **Proyecto desarrollado por Miguel Albornoz** como portafolio técnico para roles de Analista de Negocios y Datos.
+
+
+🔗 **Demo en Vivo**: [Haz clic aquí para ver la App funcionando](URL_A_MI_APP_REAL) (Reemplazar este link con mi URL real al desplegar)
 
 ---
 
