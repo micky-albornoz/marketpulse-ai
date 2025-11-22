@@ -20,7 +20,7 @@ En el retail moderno, la intuición no es suficiente. **MarketPulse AI** resuelv
 
 1.  **Detección de Demanda Real**: Conexión directa a la API pública de Mercado Libre (o `/trends`) para identificar qué buscan los usuarios **hoy**.
 2.  **Barreras de Entrada (Saturación)**: Algoritmo que cuantifica la competencia analizando el porcentaje de vendedores "Platinum" en la primera página de resultados.
-3.  **Análisis Cualitativo (NLP)**: Uso de Inteligencia Artificial (**TextBlob**) para leer las preguntas de los compradores y detectar **"pain points"** (quejas o dudas recurrentes).
+3.  **Análisis Cualitativo con IA**: Utiliza la bilblioteca **TextBlob** que simplifica el procesamiento del lenguaje natural (NLP), proporcionando una API sencilla para leer las preguntas de los compradores y detectar **"pain points"** (quejas o dudas recurrentes).
 
 ***
 
