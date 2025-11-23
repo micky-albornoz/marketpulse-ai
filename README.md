@@ -8,9 +8,6 @@
 
 🧑‍💻 **Proyecto desarrollado por Miguel Albornoz** como portafolio técnico para roles de Analista de Negocios y Datos.
 
-
-🔗 **Demo en Vivo**: [Haz clic aquí para ver la App funcionando](URL_A_MI_APP_REAL) (Reemplazar este link con mi URL real al desplegar)
-
 ---
 
 ## 📸 Interfaz del Dashboard
@@ -43,32 +40,42 @@ Imagínate que la herramienta detecta la tendencia: **"Auriculares para dormir"*
 La arquitectura del proyecto sigue las mejores prácticas de desarrollo en **Python**:
 
 * Core: **Python 3.x**
-* Data Fetching: **Requests** (Consumo de APIs RESTful).
+* Data Fetching: **CloudScraper** (Evasión de bloqueos de seguridad).
 * ETL & Análisis: **Pandas** para manipulación de estructuras de datos.
 * AI & NLP: **TextBlob** para análisis de sentimiento y procesamiento de texto.
 * Frontend: **Streamlit** para la visualización de datos interactiva.
 * Viz: **Plotly** para gráficos dinámicos.
 
-***
+---
 
-## 💻 Instalación y Ejecución
+🔗 **Demo en Vivo**: [Haz clic aquí para ver la App funcionando](URL_A_MI_APP_REAL) (Reemplazar este link con mi URL real al desplegar)
 
-1.  Clonar el repositorio:
+---
+
+## 🚀 Instalación y Ejecución (Entorno Local)
+
+> **⚠️ Nota Importante:** Debido a las políticas de seguridad de Mercado Libre, las peticiones desde servidores en la nube (como GitHub Codespaces o Streamlit Cloud) suelen ser bloqueadas (**Error 403**). Para **garantizar el acceso a datos reales**, se recomienda ejecutar este proyecto en su computadora local.
+
+---
+
+1.  **Clonar el repositorio:**
 
     ```bash
-    git clone https://github.com/micky-albornoz/marketpulse-ai.git
+    git clone [https://github.com/micky-albornoz/marketpulse-ai.git](https://github.com/micky-albornoz/marketpulse-ai.git)
     ```
 
-2.  Instalar dependencias:
+2.  **Instalar dependencias:**
 
     ```bash
     pip install -r requirements.txt
     ```
 
-3.  Lanzar la aplicación:
+3.  **Lanzar la aplicación:**
 
     ```bash
     streamlit run app.py
     ```
+
+---
 
 *Este software fue diseñado con fines educativos y de demostración técnica.*
