@@ -10,18 +10,27 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 
 # ==============================================================================
-# MÓDULO DE INGENIERÍA DE DATOS: VISUAL WEB SCRAPING (MULTI-PLATAFORMA)
+# MÓDULO DE INGENIERÍA DE DATOS: ANÁLISIS DE CATEGORÍAS POPULARES
 # ------------------------------------------------------------------------------
-# COMPATIBILIDAD INTELIGENTE:
-# Este script detecta el sistema operativo y selecciona la mejor estrategia de
-# inicialización del driver:
-# - MacOS (Darwin): Inicialización Nativa (Directa) para evitar bloqueos de permisos.
-# - Windows/Linux: Inicialización Gestionada (webdriver_manager) para portabilidad.
+# ESTRATEGIA TÉCNICA: "Category Sampling" (Muestreo de Categorías)
+#
+# 1. Discovery: Identificamos visualmente las tarjetas etiquetadas como
+#    "MÁS POPULAR" en la home de tendencias. No usamos listas hardcodeadas.
+# 2. Drill-Down: Navegamos al listado real de cada tendencia.
+# 3. Sampling: En lugar de asumir un solo precio, tomamos una muestra estadística
+#    de los primeros N resultados orgánicos para calcular métricas del nicho
+#    (Precio Promedio, Saturación de Oferta, etc.).
 # ==============================================================================
+
+# Palabras clave para filtrar elementos de navegación que no son productos
+BLACKLIST_SISTEMA = [
+    "ver más", "ver todo", "historial", "vender", "ayuda", "categorías",
+    "ofertas", "tiendas oficiales", "moda", "mercado play", "envíos"
+]
 
 def iniciar_navegador_controlado():
     """
-    Inicializa el entorno de navegación aplicando la estrategia adecuada según el SO.
+    Inicializa el entorno de navegación con configuración cross-platform.
     """
     sistema_operativo = platform.system()
     print(f"   🔧 [Sistema] Detectado OS: {sistema_operativo}")
@@ -29,7 +38,7 @@ def iniciar_navegador_controlado():
     options = Options()
     options.add_argument("--start-maximized")
     
-    # --- CONFIGURACIÓN ANTI-DETECCIÓN ---
+    # Configuración Anti-Detección para evitar bloqueos
     options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option('useAutomationExtension', False)
@@ -38,44 +47,34 @@ def iniciar_navegador_controlado():
     if sistema_operativo == "Windows":
         options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
     else:
-        # MacOS / Linux
         options.add_argument("user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
-    driver = None
-
-    # --- ESTRATEGIA DE INICIALIZACIÓN HÍBRIDA ---
     try:
-        # CASO MAC (DARWIN): Preferimos el método nativo que evita bloqueos de red locales
+        # Intentamos método nativo para Mac primero
         if sistema_operativo == "Darwin":
-            print("   🍏 [Mac] Intentando arranque NATIVO de Chrome (Más estable)...")
             try:
-                # Selenium moderno busca el driver instalado en el sistema automáticamente
-                driver = webdriver.Chrome(options=options)
-                return driver
-            except Exception as e_mac:
-                print(f"   ⚠️ [Mac] El arranque nativo falló ({e_mac}). Pasando a método Gestor...")
+                return webdriver.Chrome(options=options)
+            except: pass
 
-        # CASO WINDOWS / FALLBACK: Usamos el Gestor Automático (Ideal para portabilidad)
-        print("   📥 [Driver] Verificando/Descargando driver compatible (Gestor)...")
+        # Método gestor universal
         service = Service(ChromeDriverManager().install())
-        driver = webdriver.Chrome(service=service, options=options)
-        return driver
+        return webdriver.Chrome(service=service, options=options)
 
     except Exception as e:
-        print(f"   ❌ [Error Crítico] Fallo total al iniciar el driver: {e}")
+        print(f"   ❌ [Error Crítico] Fallo al iniciar driver: {e}")
         return None
 
 # ==============================================================================
-# LÓGICA DE EXTRACCIÓN DE TENDENCIAS (POR SECCIONES)
+# FASE 1: IDENTIFICACIÓN DE TENDENCIAS POPULARES
 # ==============================================================================
 
-def obtener_tendencias_mercado(limit=5):
+def obtener_categorias_populares(limit=5):
     """
-    Navega a la landing de tendencias y extrae ítems específicos de la sección
-    'Las tendencias más populares' utilizando localización por XPath.
+    Escanea la sección visual 'Las tendencias más populares' y extrae
+    las categorías líderes (ej: Notebook, Celulares).
     """
     url = "https://tendencias.mercadolibre.com.ar/"
-    print(f"🔄 [Navegando] Accediendo a Landing Page: {url}")
+    print(f"🔄 [Discovery] Analizando Hub de Tendencias: {url}")
     
     driver = iniciar_navegador_controlado()
     if not driver: return pd.DataFrame()
@@ -84,115 +83,148 @@ def obtener_tendencias_mercado(limit=5):
 
     try:
         driver.get(url)
+        print("   ✋ [Espera] 8s para renderizado visual...")
+        time.sleep(8) 
         
-        print("   ✋ [Interacción] Esperando 10s para carga de componentes dinámicos...")
-        time.sleep(10) 
+        # ESTRATEGIA VISUAL: Buscar etiquetas "MÁS POPULAR"
+        # En lugar de adivinar el contenedor, buscamos el "badge" azul que dice "MÁS POPULAR".
+        # Luego subimos al contenedor padre para encontrar el enlace del producto.
         
-        # --- ESTRATEGIA DE XPATH ---
-        print("   👀 [Visual] Buscando anclaje: 'Las tendencias más populares'...")
+        print("   👀 [Visual] Buscando etiquetas 'MÁS POPULAR'...")
         
-        # Buscamos el contenedor padre que tiene el título "tendencias más populares"
-        xpath_populares = "//*[contains(text(), 'tendencias más populares')]/ancestor::div[contains(@class, 'hub-container')]//a"
-        xpath_backup = "//*[contains(text(), 'tendencias más populares')]/following::div[1]//a"
+        # XPath: Busca elementos que contengan el texto "MÁS POPULAR"
+        # y navega hacia el enlace contenedor o hermano.
+        badges_populares = driver.find_elements(By.XPATH, "//*[contains(text(), 'MÁS POPULAR')]")
         
-        elementos = driver.find_elements(By.XPATH, xpath_populares)
-        
-        if not elementos:
-            print("   ⚠️ [Aviso] XPath primario vacío. Intentando secundario...")
-            elementos = driver.find_elements(By.XPATH, xpath_backup)
-            
-        if not elementos:
-            print("   ⚠️ [Aviso] Sección 'Populares' no detectada. Buscando 'Más deseadas'...")
-            elementos = driver.find_elements(By.XPATH, "//*[contains(text(), 'búsquedas más deseadas')]/following::div[1]//a")
-
-        print(f"   📊 [Data] Se encontraron {len(elementos)} candidatos visuales.")
+        if not badges_populares:
+            print("   ⚠️ [Aviso] No se detectaron badges 'MÁS POPULAR'. Intentando estrategia por sección...")
+            # Fallback: Buscar por el título de la sección
+            xpath_section = "//*[contains(text(), 'tendencias más populares')]/following::div[1]//a"
+            elementos_candidatos = driver.find_elements(By.XPATH, xpath_section)
+        else:
+            # Si encontramos badges, buscamos el enlace más cercano a cada badge
+            elementos_candidatos = []
+            for badge in badges_populares:
+                try:
+                    # Intentamos encontrar el enlace padre o hermano del badge
+                    # (La estructura suele ser: Card -> Badge + Imagen + Título(Link))
+                    card = badge.find_element(By.XPATH, "./ancestor::div[contains(@class, 'card') or contains(@class, 'module')]//a")
+                    elementos_candidatos.append(card)
+                except:
+                    # Si falla el ancestro estricto, buscamos el siguiente enlace
+                    try:
+                        link = badge.find_element(By.XPATH, "./following::a[1]")
+                        elementos_candidatos.append(link)
+                    except: pass
 
         seen = set()
         count = 0
         
-        for elem in elementos:
+        for elem in elementos_candidatos:
             if count >= limit: break
             
             try:
                 texto = elem.text.strip()
                 url_link = elem.get_attribute("href")
                 
-                # Filtro de Calidad de Datos
+                # Limpieza: A veces el texto incluye "1º MÁS POPULAR\nNombre". Limpiamos.
+                if "\n" in texto:
+                    texto = texto.split("\n")[-1]
+                
                 if texto and len(texto) > 2 and "mercadolibre" in str(url_link):
-                    if texto.lower() not in ["ver más", "ver todo"] and not texto.isdigit():
-                        
-                        nombre_producto = texto.split("\n")[-1]
-                        
-                        if nombre_producto not in seen:
-                            print(f"      🔥 [Trend] Identificado: {nombre_producto}")
-                            datos_tendencias.append({"keyword": nombre_producto, "url": url_link})
-                            seen.add(nombre_producto)
+                    if not any(x in texto.lower() for x in BLACKLIST_SISTEMA):
+                        if texto not in seen:
+                            print(f"      🔥 [Tendencia Detectada] Categoría: {texto}")
+                            datos_tendencias.append({"keyword": texto, "url": url_link})
+                            seen.add(texto)
                             count += 1
             except:
                 continue
     
     except Exception as e:
-        print(f"   ⚠️ [Excepción] Error durante el parsing del DOM: {e}")
+        print(f"   ⚠️ [Excepción Visual] {e}")
     finally:
         if driver: driver.quit()
 
-    # Validación de resultados (ESTRICTA: CERO DATOS FALSOS)
     if datos_tendencias:
         return pd.DataFrame(datos_tendencias)
     else:
-        print("   ⚠️ [Alerta] No se pudo extraer la sección específica visualmente.")
-        print("   🛑 [Detenido] No se generarán datos ficticios. El reporte estará vacío.")
-        return pd.DataFrame() 
+        print("   🛑 [Stop] No se detectaron tendencias populares visualmente. No se usarán datos ficticios.")
+        return pd.DataFrame()
 
 # ==============================================================================
-# LÓGICA DE ANÁLISIS DE NICHO (MARKET INTELLIGENCE)
+# FASE 2: MUESTREO Y ANÁLISIS DE CATEGORÍA
 # ==============================================================================
 
-def analizar_nicho_mercado(keyword):
+def analizar_categoria(tendencia):
+    """
+    Navega al listado de una categoría (ej: Notebooks) y toma una muestra
+    de los primeros resultados para calcular métricas del nicho.
+    """
+    keyword = tendencia['keyword']
+    url_categoria = tendencia['url']
+    
     driver = iniciar_navegador_controlado()
     if not driver: return None
     
-    datos = None
+    datos_consolidados = None
     
     try:
-        keyword_slug = keyword.replace(" ", "-")
-        url_busqueda = f"https://listado.mercadolibre.com.ar/{keyword_slug}"
+        print(f"   🔎 [Sampling] Analizando listado de: {keyword}...")
+        print(f"      URL: {url_categoria}")
         
-        print(f"   🔎 [Analizando] {keyword}...")
-        driver.get(url_busqueda)
-        time.sleep(4) 
+        driver.get(url_categoria)
+        time.sleep(5) 
         
-        # 1. Volumen de Oferta
+        # 1. Volumen Total (Cantidad de Resultados)
         total_resultados = 0
         try:
             qty_elem = driver.find_element(By.CLASS_NAME, "ui-search-search-result__quantity-results")
-            total_resultados = int(qty_elem.text.replace(".", "").split()[0])
+            texto_qty = qty_elem.text.replace(".", "").replace(" resultados", "").strip()
+            total_resultados = int(texto_qty) if texto_qty.isdigit() else 0
         except:
+            # Estimación basada en elementos visibles si no hay contador
             total_resultados = len(driver.find_elements(By.CLASS_NAME, "ui-search-layout__item"))
 
-        # 2. Análisis de Precios
-        precios = []
-        price_elems = driver.find_elements(By.CSS_SELECTOR, ".andes-money-amount__fraction")
-        for p in price_elems[:30]:
-            try:
-                texto = p.text.replace(".", "")
-                if texto.isdigit():
-                    v = float(texto)
-                    if v > 1000: precios.append(v)
-            except: pass
-            
-        precio_promedio = sum(precios) / len(precios) if precios else 0
+        # 2. Muestreo de Productos (Top 15 orgánicos)
+        # No miramos un solo producto, sino el comportamiento del grupo.
+        items_muestra = driver.find_elements(By.CLASS_NAME, "ui-search-layout__item")[:15]
         
-        # 3. Saturación (Platinum)
-        html = driver.page_source
-        platinum_count = html.count("MercadoLíder Platinum")
-        pct_platinum = min((platinum_count / 50) * 100, 100)
+        precios_muestra = []
+        conteo_platinum = 0
+        
+        for item in items_muestra:
+            try:
+                # Extraer precio del item
+                price_elem = item.find_element(By.CSS_SELECTOR, ".andes-money-amount__fraction")
+                precio_texto = price_elem.text.replace(".", "")
+                if precio_texto.isdigit():
+                    precios_muestra.append(float(precio_texto))
+                
+                # Verificar si es Platinum (buscando el icono o texto dentro de la tarjeta)
+                if "Platinum" in item.get_attribute("innerHTML"):
+                    conteo_platinum += 1
+            except:
+                continue
+        
+        # Cálculo de Métricas sobre la Muestra
+        if precios_muestra:
+            precio_promedio = sum(precios_muestra) / len(precios_muestra)
+        else:
+            precio_promedio = 0
+            
+        # Saturación: Qué % de la primera página está dominada por Platinum
+        if items_muestra:
+            pct_platinum = (conteo_platinum / len(items_muestra)) * 100
+        else:
+            pct_platinum = 0
 
-        # 4. Sentimiento (Estimación Web)
-        sentimiento_label = "Neutro (Web Scan)"
+        # Sentiment: En un barrido de categoría, asumimos neutro
+        # (Para detalle real habría que entrar producto por producto, muy lento para demo)
+        sentimiento_label = "Neutro (Análisis de Listado)"
         sentimiento_score = 0.1
 
-        datos = {
+        datos_consolidados = {
             "keyword": keyword,
             "competencia_cantidad": total_resultados,
             "precio_promedio": round(precio_promedio, 2),
@@ -203,28 +235,29 @@ def analizar_nicho_mercado(keyword):
         }
                 
     except Exception as e:
-        print(f"   ❌ Error en análisis de '{keyword}': {e}")
+        print(f"   ❌ Error analizando categoría '{keyword}': {e}")
     finally:
         if driver: driver.quit()
         
-    return datos
+    return datos_consolidados
 
 # ==============================================================================
-# LÓGICA PRINCIPAL (PIPELINE)
+# ORQUESTADOR PRINCIPAL
 # ==============================================================================
 
 def generar_reporte_oportunidades():
-    # Obtenemos las tendencias filtradas por popularidad
-    df_trends = obtener_tendencias_mercado(limit=5) 
+    # 1. Obtener categorías populares reales (Sin hardcoding)
+    df_trends = obtener_categorias_populares(limit=5) 
     
     if df_trends.empty:
         return pd.DataFrame()
 
     resultados = []
-    print("⏳ [Pipeline] Ejecutando análisis de mercado...")
+    print("⏳ [Pipeline] Iniciando muestreo de categorías...")
     
     for index, row in df_trends.iterrows():
-        datos = analizar_nicho_mercado(row['keyword'])
+        # 2. Analizar cada categoría detectada
+        datos = analizar_categoria(row)
         if datos:
             datos['ranking_tendencia'] = index + 1
             resultados.append(datos)
@@ -232,9 +265,11 @@ def generar_reporte_oportunidades():
     df_final = pd.DataFrame(resultados)
     
     if not df_final.empty:
-        comp = df_final['competencia_cantidad'].replace(0, 1)
-        df_final['opportunity_score'] = (
-            (1 / comp) * (100 - df_final['porcentaje_platinum']) * 10000
-        ).round(2)
+        # Score: Alta demanda (ranking top) + Baja Saturación Platinum
+        # (Invertimos el ranking para que 1 sea mejor que 5)
+        ranking_weight = (6 - df_final['ranking_tendencia']) * 1000
+        platinum_penalty = df_final['porcentaje_platinum'] * 100
+        
+        df_final['opportunity_score'] = (ranking_weight - platinum_penalty).clip(lower=0)
     
     return df_final
