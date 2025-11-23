@@ -1,5 +1,5 @@
 pandas
-requests
+curl_cffi
 streamlit
 plotly
 numpy
