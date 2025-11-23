@@ -4,4 +4,3 @@ streamlit
 plotly
 numpy
 textblob
-cloudscraper

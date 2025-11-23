@@ -1,45 +1,71 @@
-import cloudscraper
+import requests
 import pandas as pd
 import time
 from textblob import TextBlob
+import platform # Librería para detectar si es Mac o Windows
 
-# --- CONFIGURACIÓN DEL SCRAPER ---
-# Creamos un "navegador" que maneja cookies y desafíos de seguridad automáticamente
-scraper = cloudscraper.create_scraper(
-    browser={
-        'browser': 'chrome',
-        'platform': 'windows',
-        'desktop': True
-    }
-)
+# --- CONFIGURACIÓN DE IDENTIDAD (HEADERS) ---
+
+# Headers optimizados para MacOS (Chrome)
+HEADERS_MAC = {
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept-Language': 'es-419,es;q=0.9,en;q=0.8',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Connection': 'keep-alive'
+}
+
+# Headers optimizados para Windows (Chrome)
+HEADERS_WIN = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept-Language': 'es-419,es;q=0.9,en;q=0.8',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Connection': 'keep-alive'
+}
+
+def get_headers():
+    """
+    Detecta automáticamente el Sistema Operativo y devuelve
+    los headers correctos para minimizar bloqueos.
+    """
+    sistema = platform.system()
+    
+    if sistema == 'Darwin': # 'Darwin' es el nombre técnico de MacOS
+        print("🍏 Detectado entorno MacOS. Usando headers específicos.")
+        return HEADERS_MAC
+    else:
+        print("🪟 Detectado Windows/Linux. Usando headers estándar.")
+        return HEADERS_WIN
 
 def obtener_tendencias_top(limit=10):
     """
-    Obtiene tendencias REALES usando CloudScraper para evadir bloqueos.
+    Obtiene tendencias REALES. 
+    Si falla, devuelve vacío para mostrar el error en pantalla (CERO datos falsos).
     """
     url = "https://api.mercadolibre.com/trends/MLA"
-    print(f"📡 Conectando a Trends (Real Data): {url}...")
+    headers = get_headers()
+    
+    print(f"📡 Conectando a Trends: {url}...")
     
     try:
-        # Usamos scraper.get en lugar de requests.get
-        response = scraper.get(url) 
+        response = requests.get(url, headers=headers, timeout=10)
         
         if response.status_code == 200:
             data = response.json()
             print(f"✅ ÉXITO: {len(data)} tendencias reales descargadas.")
             return pd.DataFrame(data).head(limit)
         else:
-            print(f"❌ Error API: Status {response.status_code}")
-            return pd.DataFrame()
+            print(f"⚠️ API bloqueó la conexión (Status {response.status_code}).")
+            return pd.DataFrame() # Devuelve vacío intencionalmente
     
     except Exception as e:
         print(f"❌ Error de conexión: {e}")
-        return pd.DataFrame()
+        return pd.DataFrame() # Devuelve vacío en caso de error
 
 def obtener_preguntas_item(item_id):
     url = f"https://api.mercadolibre.com/questions/search?item_id={item_id}"
+    headers = get_headers()
     try:
-        response = scraper.get(url)
+        response = requests.get(url, headers=headers, timeout=5)
         if response.status_code == 200:
             data = response.json()
             return [q.get('text', '') for q in data.get('questions', [])]
@@ -49,7 +75,7 @@ def obtener_preguntas_item(item_id):
 
 def analizar_sentimiento_preguntas(textos):
     if not textos:
-        return 0, "Sin datos / Neutro"
+        return 0, "Neutro/Sin Datos"
     
     scores = []
     for t in textos:
@@ -70,12 +96,14 @@ def analizar_sentimiento_preguntas(textos):
 
 def analizar_competencia(keyword):
     """
-    Analiza la competencia REAL.
+    Analiza la competencia REAL. Si falla, devuelve None.
+    NO genera datos aleatorios.
     """
     url = f"https://api.mercadolibre.com/sites/MLA/search?q={keyword}"
+    headers = get_headers()
     
     try:
-        response = scraper.get(url)
+        response = requests.get(url, headers=headers, timeout=10)
         
         if response.status_code == 200:
             data = response.json()
@@ -89,7 +117,6 @@ def analizar_competencia(keyword):
                 platinum_count = sum(1 for item in results if item.get('seller', {}).get('seller_reputation', {}).get('power_seller_status') == 'platinum')
                 pct_platinum = (platinum_count / len(results)) * 100
                 
-                # Intentamos sacar preguntas reales
                 top_item_id = results[0].get('id')
                 preguntas = obtener_preguntas_item(top_item_id)
                 score_sent, label_sent = analizar_sentimiento_preguntas(preguntas)
@@ -104,10 +131,10 @@ def analizar_competencia(keyword):
                     "cant_preguntas_analizadas": len(preguntas)
                 }
     except Exception as e:
-        print(f"Error analizando {keyword}: {e}")
+        print(f"⚠️ Error analizando '{keyword}': {e}")
         pass
 
-    return None
+    return None # Si algo falla, no retorna nada (no inventa)
 
 def generar_reporte_oportunidades():
     df_trends = obtener_tendencias_top(limit=5)
@@ -116,7 +143,7 @@ def generar_reporte_oportunidades():
         return pd.DataFrame()
 
     resultados = []
-    print("⏳ Analizando competencia real...")
+    print("⏳ Analizando items uno por uno...")
     
     for index, row in df_trends.iterrows():
         keyword = row['keyword']
@@ -124,8 +151,7 @@ def generar_reporte_oportunidades():
         if datos:
             datos['ranking_tendencia'] = index + 1
             resultados.append(datos)
-        # Random sleep para parecer humano (entre 0.5 y 1.5 seg)
-        time.sleep(0.5)
+        time.sleep(1) # Pausa ética para evitar bloqueos
 
     df_final = pd.DataFrame(resultados)
     
