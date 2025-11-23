@@ -1,71 +1,39 @@
-import requests
+from curl_cffi import requests # Usamos esta librería especial en lugar de 'requests' normal
 import pandas as pd
 import time
 from textblob import TextBlob
-import platform # Librería para detectar si es Mac o Windows
 
-# --- CONFIGURACIÓN DE IDENTIDAD (HEADERS) ---
-
-# Headers optimizados para MacOS (Chrome)
-HEADERS_MAC = {
-    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept-Language': 'es-419,es;q=0.9,en;q=0.8',
-    'Accept-Encoding': 'gzip, deflate, br',
-    'Connection': 'keep-alive'
-}
-
-# Headers optimizados para Windows (Chrome)
-HEADERS_WIN = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept-Language': 'es-419,es;q=0.9,en;q=0.8',
-    'Accept-Encoding': 'gzip, deflate, br',
-    'Connection': 'keep-alive'
-}
-
-def get_headers():
-    """
-    Detecta automáticamente el Sistema Operativo y devuelve
-    los headers correctos para minimizar bloqueos.
-    """
-    sistema = platform.system()
-    
-    if sistema == 'Darwin': # 'Darwin' es el nombre técnico de MacOS
-        print("🍏 Detectado entorno MacOS. Usando headers específicos.")
-        return HEADERS_MAC
-    else:
-        print("🪟 Detectado Windows/Linux. Usando headers estándar.")
-        return HEADERS_WIN
+# --- CONFIGURACIÓN DE NAVEGACIÓN REAL ---
+# No necesitamos definir headers manuales complejos.
+# La magia ocurre en el parámetro 'impersonate' de la petición.
 
 def obtener_tendencias_top(limit=10):
     """
-    Obtiene tendencias REALES. 
-    Si falla, devuelve vacío para mostrar el error en pantalla (CERO datos falsos).
+    Obtiene tendencias REALES imitando la huella digital TLS de un navegador.
     """
     url = "https://api.mercadolibre.com/trends/MLA"
-    headers = get_headers()
-    
     print(f"📡 Conectando a Trends: {url}...")
     
     try:
-        response = requests.get(url, headers=headers, timeout=10)
+        # 'impersonate="chrome120"' hace que la petición sea indistinguible de un Chrome real
+        response = requests.get(url, impersonate="chrome120", timeout=15)
         
         if response.status_code == 200:
             data = response.json()
             print(f"✅ ÉXITO: {len(data)} tendencias reales descargadas.")
             return pd.DataFrame(data).head(limit)
         else:
-            print(f"⚠️ API bloqueó la conexión (Status {response.status_code}).")
-            return pd.DataFrame() # Devuelve vacío intencionalmente
+            print(f"⚠️ Bloqueo de Seguridad (Status {response.status_code}).")
+            return pd.DataFrame()
     
     except Exception as e:
-        print(f"❌ Error de conexión: {e}")
-        return pd.DataFrame() # Devuelve vacío en caso de error
+        print(f"❌ Error de conexión crítico: {e}")
+        return pd.DataFrame()
 
 def obtener_preguntas_item(item_id):
     url = f"https://api.mercadolibre.com/questions/search?item_id={item_id}"
-    headers = get_headers()
     try:
-        response = requests.get(url, headers=headers, timeout=5)
+        response = requests.get(url, impersonate="chrome120", timeout=5)
         if response.status_code == 200:
             data = response.json()
             return [q.get('text', '') for q in data.get('questions', [])]
@@ -96,14 +64,12 @@ def analizar_sentimiento_preguntas(textos):
 
 def analizar_competencia(keyword):
     """
-    Analiza la competencia REAL. Si falla, devuelve None.
-    NO genera datos aleatorios.
+    Analiza la competencia REAL. Retorna None si falla.
     """
     url = f"https://api.mercadolibre.com/sites/MLA/search?q={keyword}"
-    headers = get_headers()
     
     try:
-        response = requests.get(url, headers=headers, timeout=10)
+        response = requests.get(url, impersonate="chrome120", timeout=15)
         
         if response.status_code == 200:
             data = response.json()
@@ -134,7 +100,7 @@ def analizar_competencia(keyword):
         print(f"⚠️ Error analizando '{keyword}': {e}")
         pass
 
-    return None # Si algo falla, no retorna nada (no inventa)
+    return None
 
 def generar_reporte_oportunidades():
     df_trends = obtener_tendencias_top(limit=5)
@@ -151,7 +117,7 @@ def generar_reporte_oportunidades():
         if datos:
             datos['ranking_tendencia'] = index + 1
             resultados.append(datos)
-        time.sleep(1) # Pausa ética para evitar bloqueos
+        time.sleep(1.5) # Pausa un poco más larga para ser amable
 
     df_final = pd.DataFrame(resultados)
     
