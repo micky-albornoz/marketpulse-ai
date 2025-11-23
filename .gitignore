@@ -18,3 +18,8 @@ ENV/
 # VS Code settings (opcional, por si acaso)
 
 .vscode/
+
+# Scripts locales de diagnóstico (No subir al repo)
+
+test_selenium.py
+get_token.py
