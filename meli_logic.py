@@ -12,42 +12,57 @@ from webdriver_manager.chrome import ChromeDriverManager
 # ==============================================================================
 # MÓDULO DE INGENIERÍA DE DATOS: VISUAL WEB SCRAPING (MULTI-PLATAFORMA)
 # ------------------------------------------------------------------------------
-# COMPATIBILIDAD:
-# Este script ha sido optimizado para ejecutarse tanto en entornos MacOS (Unix)
-# como en Windows (NT), detectando el sistema operativo y ajustando los drivers.
+# COMPATIBILIDAD INTELIGENTE:
+# Este script detecta el sistema operativo y selecciona la mejor estrategia de
+# inicialización del driver:
+# - MacOS (Darwin): Inicialización Nativa (Directa) para evitar bloqueos de permisos.
+# - Windows/Linux: Inicialización Gestionada (webdriver_manager) para portabilidad.
 # ==============================================================================
 
 def iniciar_navegador_controlado():
     """
-    Inicializa el entorno de navegación con configuración agnóstica al SO.
+    Inicializa el entorno de navegación aplicando la estrategia adecuada según el SO.
     """
     sistema_operativo = platform.system()
     print(f"   🔧 [Sistema] Detectado OS: {sistema_operativo}")
-    print("   🔧 [Sistema] Inicializando motor de renderizado (Chrome)...")
     
     options = Options()
     options.add_argument("--start-maximized")
     
-    # Desactivar banderas de automatización
+    # --- CONFIGURACIÓN ANTI-DETECCIÓN ---
     options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option('useAutomationExtension', False)
     
-    # User-Agent Dinámico según el Sistema Operativo
+    # User-Agent Dinámico
     if sistema_operativo == "Windows":
         options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
     else:
         # MacOS / Linux
         options.add_argument("user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
+    driver = None
+
+    # --- ESTRATEGIA DE INICIALIZACIÓN HÍBRIDA ---
     try:
-        # Usamos webdriver_manager para instalar el driver correcto AUTOMÁTICAMENTE
-        # Esto evita que el usuario tenga que descargar 'chromedriver.exe' manualmente.
+        # CASO MAC (DARWIN): Preferimos el método nativo que evita bloqueos de red locales
+        if sistema_operativo == "Darwin":
+            print("   🍏 [Mac] Intentando arranque NATIVO de Chrome (Más estable)...")
+            try:
+                # Selenium moderno busca el driver instalado en el sistema automáticamente
+                driver = webdriver.Chrome(options=options)
+                return driver
+            except Exception as e_mac:
+                print(f"   ⚠️ [Mac] El arranque nativo falló ({e_mac}). Pasando a método Gestor...")
+
+        # CASO WINDOWS / FALLBACK: Usamos el Gestor Automático (Ideal para portabilidad)
+        print("   📥 [Driver] Verificando/Descargando driver compatible (Gestor)...")
         service = Service(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=options)
         return driver
+
     except Exception as e:
-        print(f"   ❌ [Error Crítico] Fallo en el driver ({sistema_operativo}): {e}")
+        print(f"   ❌ [Error Crítico] Fallo total al iniciar el driver: {e}")
         return None
 
 # ==============================================================================
@@ -76,6 +91,7 @@ def obtener_tendencias_mercado(limit=5):
         # --- ESTRATEGIA DE XPATH ---
         print("   👀 [Visual] Buscando anclaje: 'Las tendencias más populares'...")
         
+        # Buscamos el contenedor padre que tiene el título "tendencias más populares"
         xpath_populares = "//*[contains(text(), 'tendencias más populares')]/ancestor::div[contains(@class, 'hub-container')]//a"
         xpath_backup = "//*[contains(text(), 'tendencias más populares')]/following::div[1]//a"
         
@@ -101,6 +117,7 @@ def obtener_tendencias_mercado(limit=5):
                 texto = elem.text.strip()
                 url_link = elem.get_attribute("href")
                 
+                # Filtro de Calidad de Datos
                 if texto and len(texto) > 2 and "mercadolibre" in str(url_link):
                     if texto.lower() not in ["ver más", "ver todo"] and not texto.isdigit():
                         
@@ -119,7 +136,7 @@ def obtener_tendencias_mercado(limit=5):
     finally:
         if driver: driver.quit()
 
-    # Validación de resultados (SIN FALLBACK)
+    # Validación de resultados (ESTRICTA: CERO DATOS FALSOS)
     if datos_tendencias:
         return pd.DataFrame(datos_tendencias)
     else:
