@@ -16,11 +16,12 @@
 
 ## 🎯 Propuesta de Valor
 
-En el retail moderno, la intuición no es suficiente. **MarketPulse AI** resuelve la ineficiencia del análisis manual atacando tres puntos ciegos:
+En el retail moderno, la intuición no es suficiente. MarketPulse AI resuelve la ineficiencia del análisis manual atacando tres puntos ciegos mediante el consumo de datos reales::
 
-1.  **Detección de Demanda Real**: Conexión directa a la API pública de Mercado Libre (o `/trends`) para identificar qué buscan los usuarios ***hoy***.
-2.  **Barreras de Entrada (Saturación)**: Algoritmo que cuantifica la competencia analizando el porcentaje de vendedores "Platinum" en la primera página de resultados.
-3.  **Análisis Cualitativo con IA**: Utiliza la bilblioteca **TextBlob** que simplifica el procesamiento del lenguaje natural (NLP), proporcionando una API sencilla para leer las preguntas de los compradores y detectar **"pain points"** (quejas o dudas recurrentes).
+1.  **Detección de Demanda Real**: Conexión directa a la API pública de Mercado Libre (o `/trends`) para identificar qué buscan los usuarios en tiempo real.
+2.  **Barreras de Entrada (Saturación)**: Algoritmo que cuantifica la competencia analizando el porcentaje de vendedores "Platinum" en los primeros 50 resultados orgánicos.
+3.  **Análisis de Sentimiento con IA**: Utiliza la librería *TextBlob* para aplicar técnicas de *NLP (Procesamiento de Lenguaje Natural)*, permitiendo evaluar cualitativamente la satisfacción del mercado.
+4.  **Scoring de Oportunidad:**: Modelo matemático que pondera demanda vs. oferta para sugerir nichos rentables con un puntaje unificado (0-100).
 
 ***
 
@@ -35,46 +36,40 @@ Imagínate que la herramienta detecta la tendencia: **"Auriculares para dormir"*
 
 ***
 
-## ⚙️ Stack Tecnológico
+## 🛠️ Stack Tecnológico
 
-La arquitectura del proyecto sigue las mejores prácticas de desarrollo en **Python**:
+La arquitectura del proyecto sigue las mejores prácticas de desarrollo en Python e integración de APIs:
 
-* Core: **Python 3.x**
-* Data Acquisition: **Selenium WebDriver** (Automatización de navegador real para máxima fiabilidad).
-* ETL & Análisis: **Pandas** para manipulación de estructuras de datos.
-* AI & NLP: **TextBlob** para análisis de sentimiento y procesamiento de texto.
-* Frontend: **Streamlit** para la visualización de datos interactiva.
-* Viz: **Plotly** para gráficos dinámicos.
+* **Core:** `Python 3.x`
+* **Data Fetching:** `Requests` (Consumo de API RESTful de Mercado Libre con manejo de Rate Limiting).
+* **ETL & Análisis:** `Pandas` para normalización y transformación de datasets JSON.
+* **AI & NLP:** `TextBlob` para análisis de sentimiento (proxy).
+* **Frontend:** `Streamlit` para la visualización de datos interactiva.
+* **Viz:** `Plotly` para gráficos dinámicos.
 
----
+***
 
-🔗 **Demo en Vivo**: [Haz clic aquí para ver la App funcionando](URL_A_MI_APP_REAL) (Reemplazar este link con mi URL real al desplegar)
+## 💻 Instalación y Ejecución
 
----
+1. **Clonar el repositorio:**
 
-## 🚀 Instalación y Ejecución (Entorno Local)
+```bash
+git clone https://github.com/micky-albornoz/marketpulse-ai.git
+```
 
-> **⚠️ Nota Importante:** Debido a las políticas de seguridad de Mercado Libre, las peticiones desde servidores en la nube (como GitHub Codespaces o Streamlit Cloud) suelen ser bloqueadas (**Error 403**). Para **garantizar el acceso a datos reales**, se recomienda ejecutar este proyecto en su computadora local.
+2. **Instalar dependencias:**
 
----
+```bash
+pip install -r requirements.txt
+```
 
-1.  **Clonar el repositorio:**
+3. **Configuración (Opcional):** Si dispone de un `ACCESS_TOKEN` de Mercado Libre, puede configurarlo en `meli_logic.py` para evitar límites de cuota pública.
 
-    ```bash
-    git clone [https://github.com/micky-albornoz/marketpulse-ai.git](https://github.com/micky-albornoz/marketpulse-ai.git)
-    ```
+4. **Lanzar la aplicación:**
 
-2.  **Instalar dependencias:**
-
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-3.  **Lanzar la aplicación:**
-
-    ```bash
-    streamlit run app.py
-    ```
+```bash
+streamlit run app.py
+```
 
 ---
 
