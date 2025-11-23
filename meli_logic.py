@@ -9,13 +9,21 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 # ==============================================================================
-# MÓDULO DE INGENIERÍA DE DATOS: VISUAL WEB SCRAPING (INTERACTIVO)
+# MÓDULO DE INGENIERÍA DE DATOS: VISUAL WEB SCRAPING (REFINADO)
 # ------------------------------------------------------------------------------
-# ESTRATEGIA: "Copiloto Humano"
-# El script abre el navegador y espera un tiempo prudencial para permitir
-# que el operador humano (tú) resuelva CAPTCHAs o validaciones de seguridad
-# antes de intentar extraer los datos del DOM.
+# ACTUALIZACIÓN V2: FILTROS DE CALIDAD
+# Se han incorporado mecanismos de filtrado para distinguir entre contenido real
+# (Tendencias) y elementos estructurales de la web (Menús, Footers, Legales).
 # ==============================================================================
+
+# Lista de términos que NO son productos y deben ser ignorados
+BLACKLIST_KEYWORDS = [
+    "mercado libre", "categorías", "vender", "ayuda", "crea tu cuenta", 
+    "ingresa", "mis compras", "tiendas oficiales", "ofertas", "historial",
+    "moda", "compra internacional", "enviar a", "capital federal", "ver más",
+    "acerca de", "términos", "privacidad", "accesibilidad", "descargar app",
+    "supermercado", "suscribite", "nivel 6", "disney+", "star+"
+]
 
 def iniciar_navegador_controlado():
     print("   🔧 [Sistema] Inicializando navegador Chrome...")
@@ -34,11 +42,32 @@ def iniciar_navegador_controlado():
         return None
 
 # ==============================================================================
-# LÓGICA DE EXTRACCIÓN DE TENDENCIAS
+# LÓGICA DE EXTRACCIÓN DE TENDENCIAS (CON FILTROS)
 # ==============================================================================
 
+def es_tendencia_valida(texto, url):
+    """
+    Filtra enlaces de navegación, menús y basura.
+    Devuelve True solo si parece un producto o categoría real.
+    """
+    texto_lower = texto.lower().strip()
+    
+    # 1. Filtro de longitud
+    if len(texto_lower) < 4: return False
+    
+    # 2. Filtro de Blacklist (Palabras prohibidas)
+    for prohibida in BLACKLIST_KEYWORDS:
+        if prohibida in texto_lower:
+            return False
+            
+    # 3. Filtro de URL (Debe parecer una búsqueda o listado)
+    # Las tendencias suelen llevar a '/listado/' o '/tendencias/'
+    if "registration" in url or "login" in url or "context" in url:
+        return False
+        
+    return True
+
 def obtener_tendencias_mercado(limit=10):
-    # Usamos la home de tendencias que suele ser más estable
     url = "https://tendencias.mercadolibre.com.ar/"
     
     print(f"🔄 [Navegando] Visitando: {url}")
@@ -51,51 +80,44 @@ def obtener_tendencias_mercado(limit=10):
     try:
         driver.get(url)
         
-        # --- TIEMPO DE INTERVENCIÓN HUMANA (20 SEGUNDOS) ---
-        print("   ✋ [ATENCIÓN] Tienes 20 segundos. Si ves un CAPTCHA, resuélvelo AHORA.")
-        print("   ⏳ Esperando carga completa...")
-        time.sleep(20) 
+        # --- TIEMPO DE INTERVENCIÓN HUMANA ---
+        print("   ✋ [ATENCIÓN] Tienes 15 segundos. Resuelve CAPTCHAs si aparecen.")
+        time.sleep(15) 
         
-        # Estrategia de Selectores Ampliada
-        posibles_selectores = [
-            "ol li a",                  # Lista clásica
-            "div.andes-card a",         # Tarjetas
-            ".trends-term",             # Clase específica
-            "h2 + ul li a",             # Listas después de títulos
-            "a"                         # (Último recurso) Cualquier enlace
-        ]
+        # Estrategia: Buscamos TODOS los enlaces y filtramos después
+        # Esto es más robusto que adivinar el selector exacto hoy.
+        elementos = driver.find_elements(By.TAG_NAME, "a")
         
-        elementos_encontrados = []
-        for selector in posibles_selectores:
-            elems = driver.find_elements(By.CSS_SELECTOR, selector)
-            # Filtramos enlaces basura (muy cortos o vacíos)
-            validos = [e for e in elems if len(e.text) > 3 and "mercadolibre" in str(e.get_attribute("href"))]
+        print(f"   👀 [Visual] Se encontraron {len(elementos)} enlaces totales en la página.")
+        
+        # Procesamiento y Filtrado
+        count = 0
+        for elem in elementos:
+            if count >= limit: break
             
-            if len(validos) > 5: 
-                print(f"   👀 [Visual] Selector exitoso: '{selector}' ({len(validos)} items)")
-                elementos_encontrados = validos
-                break
-        
-        for elem in elementos_encontrados[:limit]:
-            texto = elem.text.strip()
-            url_link = elem.get_attribute("href")
-            datos_tendencias.append({"keyword": texto, "url": url_link})
+            try:
+                texto = elem.text.strip()
+                url_link = elem.get_attribute("href")
+                
+                if texto and url_link and es_tendencia_valida(texto, url_link):
+                    # Evitar duplicados
+                    if not any(d['keyword'] == texto for d in datos_tendencias):
+                        print(f"      ✅ Detectada tendencia válida: {texto}")
+                        datos_tendencias.append({"keyword": texto, "url": url_link})
+                        count += 1
+            except:
+                continue # Si un elemento falla, seguimos con el siguiente
     
     except Exception as e:
         print(f"   ⚠️ [Error Visual] {e}")
     finally:
-        # CAPTURA DE DIAGNÓSTICO
-        if not datos_tendencias:
-            print("   📸 [Debug] Guardando captura de pantalla del error (debug_failure.png)...")
-            driver.save_screenshot("debug_failure.png")
-            
         if driver: driver.quit()
 
     if datos_tendencias:
-        print(f"   ✅ [Éxito] {len(datos_tendencias)} tendencias extraídas.")
+        print(f"   ✅ [Éxito] {len(datos_tendencias)} tendencias limpias extraídas.")
         return pd.DataFrame(datos_tendencias)
     else:
-        print("   ⚠️ [Fallo] No se encontraron datos. Revisa la imagen 'debug_failure.png'.")
+        print("   ⚠️ [Fallo] No se encontraron datos válidos post-filtro.")
         return pd.DataFrame()
 
 # ==============================================================================
@@ -114,8 +136,6 @@ def analizar_nicho_mercado(keyword):
         
         print(f"   🔎 [Investigando] {keyword}...")
         driver.get(url_busqueda)
-        
-        # Espera corta para búsquedas (asumimos que si pasaste tendencias, ya no hay captcha)
         time.sleep(5) 
         
         # 1. Cantidad Resultados
@@ -124,15 +144,31 @@ def analizar_nicho_mercado(keyword):
             qty_elem = driver.find_element(By.CLASS_NAME, "ui-search-search-result__quantity-results")
             total_resultados = int(qty_elem.text.replace(".", "").split()[0])
         except:
-            total_resultados = len(driver.find_elements(By.CLASS_NAME, "ui-search-layout__item"))
+            # Si falla, intentamos buscar el texto "X resultados" en toda la página
+            try:
+                body_text = driver.find_element(By.TAG_NAME, "body").text
+                # Buscamos patrones numéricos seguidos de "resultados"
+                import re
+                match = re.search(r'([\d\.]+)\s+resultados', body_text)
+                if match:
+                    total_resultados = int(match.group(1).replace(".", ""))
+                else:
+                    total_resultados = len(driver.find_elements(By.CLASS_NAME, "ui-search-layout__item"))
+            except:
+                total_resultados = 0
 
         # 2. Precios
         precios = []
+        # Selector actualizado y más genérico para precios
+        # Buscamos elementos que contengan el símbolo $ y números
         price_elems = driver.find_elements(By.CSS_SELECTOR, ".andes-money-amount__fraction")
-        for p in price_elems[:15]:
+        
+        for p in price_elems[:20]:
             try:
-                v = float(p.text.replace(".", ""))
-                if v > 100: precios.append(v)
+                texto = p.text.replace(".", "")
+                if texto.isdigit():
+                    v = float(texto)
+                    if v > 500: precios.append(v) # Filtro de precios bajos (cuotas)
             except: pass
             
         precio_promedio = sum(precios) / len(precios) if precios else 0
