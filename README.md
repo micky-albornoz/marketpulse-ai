@@ -40,7 +40,7 @@ Imagínate que la herramienta detecta la tendencia: **"Auriculares para dormir"*
 La arquitectura del proyecto sigue las mejores prácticas de desarrollo en **Python**:
 
 * Core: **Python 3.x**
-* Data Fetching: **Curl_CFFI** (Emulación de Huella Digital TLS para acceso robusto a APIs).
+* Data Acquisition: **Selenium WebDriver** (Automatización de navegador real para máxima fiabilidad).
 * ETL & Análisis: **Pandas** para manipulación de estructuras de datos.
 * AI & NLP: **TextBlob** para análisis de sentimiento y procesamiento de texto.
 * Frontend: **Streamlit** para la visualización de datos interactiva.
