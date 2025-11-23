@@ -8,58 +8,69 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from webdriver_manager.chrome import ChromeDriverManager
 
-# --- CONFIGURACIÓN DE SELENIUM ---
+# --- CONFIGURACIÓN DEL NAVEGADOR ---
 def iniciar_driver():
-    """Configura y lanza un navegador Chrome REAL automatizado."""
+    """
+    Inicia Chrome con la configuración EXACTA que funcionó en tu test.
+    """
+    print("   🔧 Preparando navegador...")
     options = Options()
-    # options.add_argument("--headless") # Comentado para VER el navegador abrirse
-    options.add_argument("--disable-blink-features=AutomationControlled") 
+    # Usamos solo lo básico para asegurar que abra la ventana visualmente
     options.add_argument("--start-maximized")
-    options.add_argument("user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
     
-    # Instalación automática del driver de Chrome
-    service = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=options)
-    return driver
+    try:
+        # Instalación y lanzamiento
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=options)
+        return driver
+    except Exception as e:
+        print(f"   ❌ Error al abrir Chrome: {e}")
+        return None
 
 def obtener_json_selenium(driver, url):
-    """Navega a la URL y extrae el JSON crudo del cuerpo de la página."""
-    print(f"🤖 Navegando a: {url}...")
+    """Navega y extrae datos."""
+    print(f"   🤖 Navegando a: {url}")
     try:
         driver.get(url)
-        time.sleep(2) # Espera humana para cargar
+        # Espera un poco más para asegurar carga visual
+        time.sleep(3) 
         
-        # Extraemos el texto visible (que en una API es el JSON)
+        # Extraemos el texto del body (donde vive el JSON en la API)
         content = driver.find_element(By.TAG_NAME, "body").text
         return json.loads(content)
     except Exception as e:
-        print(f"⚠️ Error obteniendo datos: {e}")
+        print(f"   ⚠️ No se pudo leer JSON: {e}")
         return None
 
 def obtener_tendencias_top(limit=10):
     url = "https://api.mercadolibre.com/trends/MLA"
     
+    print("🔄 Abriendo navegador para Tendencias...")
     driver = iniciar_driver()
+    
+    if not driver: return pd.DataFrame()
+
     try:
         data = obtener_json_selenium(driver, url)
         if data:
-            print(f"✅ ÉXITO: {len(data)} tendencias descargadas.")
+            print(f"   ✅ ÉXITO: {len(data)} tendencias obtenidas.")
             return pd.DataFrame(data).head(limit)
         else:
+            print("   ⚠️ La API no devolvió datos.")
             return pd.DataFrame()
     except Exception as e:
-        print(f"❌ Error crítico: {e}")
+        print(f"   ❌ Error: {e}")
         return pd.DataFrame()
     finally:
-        driver.quit() # Cerramos el navegador al terminar
+        if driver:
+            print("   🏁 Cerrando ventana de tendencias.")
+            driver.quit() 
 
 def analizar_competencia(keyword):
-    # Nota: Para hacer esto rápido y no abrir 50 navegadores, 
-    # con Selenium abriremos un solo driver para todo el proceso.
-    # Pero para simplificar la integración con app.py actual, 
-    # instanciamos uno por consulta.
-    
+    # Abrimos una nueva ventana limpia para cada búsqueda
     driver = iniciar_driver()
+    if not driver: return None
+    
     datos_finales = None
     
     try:
@@ -107,21 +118,22 @@ def analizar_competencia(keyword):
                 }
                 
     except Exception as e:
-        print(f"Error en {keyword}: {e}")
+        print(f"Error analizando {keyword}: {e}")
     finally:
-        driver.quit()
+        if driver:
+            driver.quit()
         
     return datos_finales
 
 def generar_reporte_oportunidades():
-    # Obtenemos tendencias primero
-    df_trends = obtener_tendencias_top(limit=5) # Limitamos a 5 para probar rápido porque Selenium es más lento
+    # Limitamos a 3 para la prueba inicial
+    df_trends = obtener_tendencias_top(limit=3) 
     
     if df_trends.empty:
         return pd.DataFrame()
 
     resultados = []
-    print("⏳ Iniciando análisis detallado con navegador real...")
+    print("⏳ Iniciando análisis profundo...")
     
     for index, row in df_trends.iterrows():
         keyword = row['keyword']
