@@ -3,90 +3,82 @@ import pandas as pd
 import plotly.express as px
 import meli_logic
 
-# Configuración de la página con el nuevo nombre
+# Configuración de la página
 st.set_page_config(page_title="MarketPulse AI", layout="wide", page_icon="⚡")
 
-# Encabezado con estilo más "SaaS"
+# Título y Header
 st.title("⚡ MarketPulse AI")
 st.markdown("""
-### Detecta Océanos Azules en E-commerce con Inteligencia Artificial.
-Esta herramienta escanea tendencias de mercado en tiempo real, analiza la saturación de vendedores y utiliza **NLP (Procesamiento de Lenguaje Natural)** para entender la voz del cliente.
+### Inteligencia de Mercado en Tiempo Real
+Esta herramienta consume la API oficial de Mercado Libre para detectar oportunidades de negocio, analizando oferta, precios y barreras de entrada en las categorías de mayor tendencia.
 """)
 
-# Sidebar para controles (hace que se vea más pro)
+# Sidebar con info técnica
 with st.sidebar:
     st.header("⚙️ Configuración")
-    st.info("Conectado a API: Mercado Libre (MLA)")
-    limit_trends = st.slider("Límite de Tendencias a Analizar", 5, 20, 5)
-    st.write("---")
-    st.caption("MarketPulse AI v1.0.0")
+    st.info("Fuente de Datos: API Oficial Mercado Libre")
+    st.caption("MarketPulse AI v2.1.0 | Prod Build")
 
+# Botón de Acción
 if st.button("🚀 Iniciar Escaneo de Mercado", type="primary"):
-    with st.spinner('Analizando Tendencias, Competencia y Sentimiento (AI)...'):
-        # Usamos la lógica que ya creamos, pero es agnóstica a la marca
+    with st.spinner('Conectando con servidores de Mercado Libre...'):
+        # Llamada al Backend
         df = meli_logic.generar_reporte_oportunidades()
         
         if not df.empty:
-            st.success("¡Análisis de Inteligencia Comercial finalizado!")
+            st.success("¡Análisis completado con éxito!")
             
-            # --- KPI PRINCIPALES ---
-            # Ordenamos por mejor oportunidad
+            # --- KPI PRINCIPALES (Top Opportunity) ---
             best_opp = df.sort_values('opportunity_score', ascending=False).iloc[0]
             
-            # Contenedores métricos con estilo
             col1, col2, col3, col4 = st.columns(4)
-            col1.metric("🔥 Top Oportunidad", best_opp['keyword'])
-            col2.metric("🛡 Saturación Mercado", f"{best_opp['porcentaje_platinum']}%", delta_color="inverse", help="% de vendedores Platinum en la primera página")
-            col3.metric("💬 Sentimiento Cliente", best_opp['sentimiento_label'], help="Basado en análisis de preguntas recientes")
-            col4.metric("💰 Precio Promedio", f"$ {best_opp['precio_promedio']}")
+            col1.metric("🔥 Mejor Oportunidad", best_opp['keyword'], help="Nicho con mejor balance Demanda/Competencia")
+            col2.metric("🛡 Saturación Platinum", f"{best_opp['porcentaje_platinum']}%", delta_color="inverse", help="% de la primera página ocupada por grandes vendedores")
+            col3.metric("⭐ Calificación Estimada", f"{best_opp['sentimiento_score']} / 5", help="Rating promedio del nicho")
+            col4.metric("💎 Opportunity Score", f"{best_opp['opportunity_score']}/100", help="Puntaje algorítmico. Más alto indica mejor oportunidad de entrada.")
             
             st.divider()
 
-            # --- VISUALIZACIÓN AVANZADA ---
-            tab1, tab2 = st.tabs(["📊 Matriz de Competencia", "🧠 Análisis de Sentimiento"])
+            # --- VISUALIZACIÓN DE DATOS ---
+            tab1, tab2 = st.tabs(["📊 Matriz de Barreras", "💰 Análisis de Precios"])
             
             with tab1:
-                st.subheader("Barreras de Entrada (Dominio Platinum)")
-                st.caption("Identifica nichos donde los grandes vendedores (Platinum) aún no dominan.")
-                fig_bar = px.bar(
-                    df, 
-                    x='keyword', 
-                    y='porcentaje_platinum',
-                    color='porcentaje_platinum',
-                    text_auto=True,
-                    labels={'porcentaje_platinum': '% Dominio Platinum', 'keyword': 'Tendencia'},
-                    color_continuous_scale='Reds'
-                )
-                st.plotly_chart(fig_bar, use_container_width=True)
-            
-            with tab2:
-                st.subheader("La Voz del Cliente (AI Sentiment Analysis)")
-                st.caption("Gráfico de dispersión: ¿De qué se quejan los usuarios en categorías saturadas?")
-                fig_scatter = px.scatter(
+                # Gráfico de Dispersión: Competencia vs Dominio
+                fig = px.scatter(
                     df,
                     x='competencia_cantidad',
-                    y='sentimiento_score',
-                    size='cant_preguntas_analizadas',
-                    color='sentimiento_label',
-                    hover_name='keyword',
-                    labels={'competencia_cantidad': 'Volumen de Competencia', 'sentimiento_score': 'Score de Sentimiento (-1 a 1)'},
-                    color_discrete_map={
-                        "Positivo/Interesado": "#00CC96", 
-                        "Neutro/Dudas Técnicas": "#AB63FA", 
-                        "Negativo/Quejas": "#EF553B"
-                    }
+                    y='porcentaje_platinum',
+                    size='opportunity_score',
+                    color='keyword',
+                    title="Matriz de Competencia",
+                    labels={'competencia_cantidad': 'Volumen de Resultados', 'porcentaje_platinum': '% Dominio Platinum'},
+                    hover_data=['precio_promedio']
                 )
-                st.plotly_chart(fig_scatter, use_container_width=True)
+                st.plotly_chart(fig, use_container_width=True)
 
-            # --- DATOS CRUDOS ---
-            st.subheader("📂 Exportar Datos para Estrategia")
+            with tab2:
+                # Gráfico de Barras: Ticket Promedio
+                fig_bar = px.bar(
+                    df,
+                    x='keyword',
+                    y='precio_promedio',
+                    color='opportunity_score',
+                    title="Ticket Promedio por Categoría ($ ARS)",
+                    text_auto='.2s'
+                )
+                st.plotly_chart(fig_bar, use_container_width=True)
+
+            # --- TABLA DE DATOS RAW ---
+            st.subheader("📋 Reporte Detallado")
             st.dataframe(
-                df.style.background_gradient(subset=['opportunity_score'], cmap='Greens'),
+                df[['ranking_tendencia', 'keyword', 'competencia_cantidad', 'precio_promedio', 'porcentaje_platinum', 'sentimiento_score', 'opportunity_score']]
+                .sort_values('opportunity_score', ascending=False)
+                .style.background_gradient(subset=['opportunity_score'], cmap='Greens'),
                 use_container_width=True
             )
             
         else:
-            st.error("No se pudieron obtener datos en este momento. Verifique la conexión con la API.")
+            st.error("No se pudieron obtener datos. Posible bloqueo temporal de API (Error 403) o falta de Token.")
 
 st.markdown("---")
-st.caption("⚡ MarketPulse AI | Demo Técnica de Portafolio Profesional")
+st.caption("⚡ Desarrollado para demostración técnica de Scraping & Data Engineering.")
