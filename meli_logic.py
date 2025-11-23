@@ -1,22 +1,17 @@
-from curl_cffi import requests # Usamos esta librería especial en lugar de 'requests' normal
+from curl_cffi import requests
 import pandas as pd
 import time
 from textblob import TextBlob
 
-# --- CONFIGURACIÓN DE NAVEGACIÓN REAL ---
-# No necesitamos definir headers manuales complejos.
-# La magia ocurre en el parámetro 'impersonate' de la petición.
+# --- ESTRATEGIA: MIMETISMO NATIVO ---
 
 def obtener_tendencias_top(limit=10):
-    """
-    Obtiene tendencias REALES imitando la huella digital TLS de un navegador.
-    """
     url = "https://api.mercadolibre.com/trends/MLA"
     print(f"📡 Conectando a Trends: {url}...")
     
     try:
-        # 'impersonate="chrome120"' hace que la petición sea indistinguible de un Chrome real
-        response = requests.get(url, impersonate="chrome120", timeout=15)
+        # Usamos 'safari15_5' en lugar de chrome
+        response = requests.get(url, impersonate="safari15_5", timeout=15)
         
         if response.status_code == 200:
             data = response.json()
@@ -24,6 +19,7 @@ def obtener_tendencias_top(limit=10):
             return pd.DataFrame(data).head(limit)
         else:
             print(f"⚠️ Bloqueo de Seguridad (Status {response.status_code}).")
+            # Si falla, devolvemos vacío
             return pd.DataFrame()
     
     except Exception as e:
@@ -33,7 +29,8 @@ def obtener_tendencias_top(limit=10):
 def obtener_preguntas_item(item_id):
     url = f"https://api.mercadolibre.com/questions/search?item_id={item_id}"
     try:
-        response = requests.get(url, impersonate="chrome120", timeout=5)
+        # También usamos aquí a Safari
+        response = requests.get(url, impersonate="safari15_5", timeout=5)
         if response.status_code == 200:
             data = response.json()
             return [q.get('text', '') for q in data.get('questions', [])]
@@ -63,13 +60,11 @@ def analizar_sentimiento_preguntas(textos):
     return round(promedio, 2), etiqueta
 
 def analizar_competencia(keyword):
-    """
-    Analiza la competencia REAL. Retorna None si falla.
-    """
     url = f"https://api.mercadolibre.com/sites/MLA/search?q={keyword}"
     
     try:
-        response = requests.get(url, impersonate="chrome120", timeout=15)
+        # Safari aquí también
+        response = requests.get(url, impersonate="safari15_5", timeout=15)
         
         if response.status_code == 200:
             data = response.json()
@@ -117,7 +112,7 @@ def generar_reporte_oportunidades():
         if datos:
             datos['ranking_tendencia'] = index + 1
             resultados.append(datos)
-        time.sleep(1.5) # Pausa un poco más larga para ser amable
+        time.sleep(2) # Pausa de 2 segundos para evitar parecer un bot agresivo
 
     df_final = pd.DataFrame(resultados)
     
