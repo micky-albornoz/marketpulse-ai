@@ -1,0 +1,20 @@
+# Byte-compiled / optimized / DLL files
+
+pycache/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual Environments
+
+env/
+venv/
+ENV/
+
+# Streamlit
+
+.streamlit/
+
+# VS Code settings (opcional, por si acaso)
+
+.vscode/
