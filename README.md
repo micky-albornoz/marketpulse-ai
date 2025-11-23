@@ -18,7 +18,7 @@
 
 En el retail moderno, la intuición no es suficiente. **MarketPulse AI** resuelve la ineficiencia del análisis manual atacando tres puntos ciegos:
 
-1.  **Detección de Demanda Real**: Conexión directa a la API pública de Mercado Libre (o `/trends`) para identificar qué buscan los usuarios **hoy**.
+1.  **Detección de Demanda Real**: Conexión directa a la API pública de Mercado Libre (o `/trends`) para identificar qué buscan los usuarios ***hoy***.
 2.  **Barreras de Entrada (Saturación)**: Algoritmo que cuantifica la competencia analizando el porcentaje de vendedores "Platinum" en la primera página de resultados.
 3.  **Análisis Cualitativo con IA**: Utiliza la bilblioteca **TextBlob** que simplifica el procesamiento del lenguaje natural (NLP), proporcionando una API sencilla para leer las preguntas de los compradores y detectar **"pain points"** (quejas o dudas recurrentes).
 
@@ -40,7 +40,7 @@ Imagínate que la herramienta detecta la tendencia: **"Auriculares para dormir"*
 La arquitectura del proyecto sigue las mejores prácticas de desarrollo en **Python**:
 
 * Core: **Python 3.x**
-* Data Fetching: **CloudScraper** (Evasión de bloqueos de seguridad).
+* Data Fetching: **Requests** (Gestión avanzada de sesiones HTTP y Headers).
 * ETL & Análisis: **Pandas** para manipulación de estructuras de datos.
 * AI & NLP: **TextBlob** para análisis de sentimiento y procesamiento de texto.
 * Frontend: **Streamlit** para la visualización de datos interactiva.
