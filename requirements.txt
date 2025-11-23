@@ -1,5 +1,6 @@
 pandas
-curl_cffi
+selenium
+webdriver-manager
 streamlit
 plotly
 numpy
