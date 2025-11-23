@@ -11,12 +11,12 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 
 # ==============================================================================
-# MÓDULO DE INGENIERÍA DE DATOS: ANÁLISIS PROFUNDO (DEEP DIVE)
+# MÓDULO DE INGENIERÍA DE DATOS: ANÁLISIS PROFUNDO (V6)
 # ------------------------------------------------------------------------------
-# CAMBIOS MAYORES V5:
-# 1. PLATINUM: Detección iterativa ítem por ítem (más precisa que el HTML global).
-# 2. SENTIMIENTO: Navegación real a la ficha del producto líder para leer estrellas.
-# 3. SCORING: Normalización de métricas para un puntaje 0-100 legible.
+# CORRECCIONES:
+# 1. Detección Platinum mediante inspección de HTML (innerHTML) para capturar
+#    íconos y etiquetas no textuales.
+# 2. Clarificación de extracción de "Total Resultados" (Lectura de contador).
 # ==============================================================================
 
 BLACKLIST_SISTEMA = [
@@ -25,7 +25,6 @@ BLACKLIST_SISTEMA = [
 ]
 
 def iniciar_navegador_controlado():
-    """Inicializa el navegador con configuración anti-bloqueo."""
     sistema_operativo = platform.system()
     print(f"   🔧 [Sistema] Detectado OS: {sistema_operativo}")
     
@@ -53,7 +52,7 @@ def iniciar_navegador_controlado():
         return None
 
 # ==============================================================================
-# FASE 1: DISCOVERY (Igual que antes, funciona bien)
+# FASE 1: DISCOVERY
 # ==============================================================================
 
 def obtener_categorias_populares(limit=5):
@@ -73,12 +72,12 @@ def obtener_categorias_populares(limit=5):
         print("   👀 [Visual] Buscando etiquetas 'MÁS POPULAR'...")
         badges_populares = driver.find_elements(By.XPATH, "//*[contains(text(), 'MÁS POPULAR')]")
         
+        elementos_candidatos = []
         if not badges_populares:
-            print("   ⚠️ [Aviso] No se detectaron badges. Intentando fallback por sección...")
+            # Fallback a búsqueda por sección si no hay badges
             xpath_section = "//*[contains(text(), 'tendencias más populares')]/following::div[1]//a"
             elementos_candidatos = driver.find_elements(By.XPATH, xpath_section)
         else:
-            elementos_candidatos = []
             for badge in badges_populares:
                 try:
                     card = badge.find_element(By.XPATH, "./ancestor::div[contains(@class, 'card') or contains(@class, 'module')]//a")
@@ -115,7 +114,6 @@ def obtener_categorias_populares(limit=5):
     if datos_tendencias:
         return pd.DataFrame(datos_tendencias)
     else:
-        print("   🛑 [Stop] No se detectaron tendencias.")
         return pd.DataFrame()
 
 # ==============================================================================
@@ -123,26 +121,19 @@ def obtener_categorias_populares(limit=5):
 # ==============================================================================
 
 def obtener_detalle_producto(driver, url_producto):
-    """
-    Entra a la ficha del producto para leer el rating real (Estrellas).
-    """
+    """Entra a la ficha del producto para leer el rating real."""
     print(f"      👉 [Deep Dive] Entrando al producto líder...")
     try:
         driver.get(url_producto)
         time.sleep(3)
-        
-        # Buscamos el rating (número grande, ej: "4.7")
-        # Selectores comunes de rating en ficha de producto
         try:
             rating_elem = driver.find_element(By.CLASS_NAME, "ui-pdp-review__rating")
             rating = float(rating_elem.text.strip())
             print(f"         ⭐ Rating encontrado: {rating}")
             return rating
         except:
-            print("         ⚠️ No se encontró rating visible.")
             return 0.0
-    except Exception as e:
-        print(f"         ❌ Error leyendo producto: {e}")
+    except:
         return 0.0
 
 def analizar_categoria(tendencia):
@@ -159,12 +150,14 @@ def analizar_categoria(tendencia):
         driver.get(url_categoria)
         time.sleep(5) 
         
-        # 1. Volumen Total
+        # 1. Volumen Total (Lectura del Contador)
         total_resultados = 0
         try:
+            # Buscamos el texto que dice "XX.XXX resultados"
             qty_elem = driver.find_element(By.CLASS_NAME, "ui-search-search-result__quantity-results")
             texto_qty = qty_elem.text.replace(".", "").replace(" resultados", "").strip()
             total_resultados = int(texto_qty) if texto_qty.isdigit() else 0
+            print(f"      📊 Contador de Competencia Leído: {total_resultados}")
         except:
             total_resultados = len(driver.find_elements(By.CLASS_NAME, "ui-search-layout__item"))
 
@@ -175,12 +168,8 @@ def analizar_categoria(tendencia):
         conteo_platinum = 0
         url_primer_producto = None
         
-        print(f"      📊 Analizando muestra de {len(items_muestra)} items...")
-        
         for i, item in enumerate(items_muestra):
             try:
-                texto_item = item.text  # Leemos TODO el texto de la tarjeta
-                
                 # A. Precio
                 try:
                     price_elem = item.find_element(By.CSS_SELECTOR, ".andes-money-amount__fraction")
@@ -189,13 +178,17 @@ def analizar_categoria(tendencia):
                         precios_muestra.append(float(precio_texto))
                 except: pass
                 
-                # B. Platinum (Búsqueda textual directa en la tarjeta)
-                # Esto es más robusto que buscar clases ocultas
-                if "Platinum" in texto_item or "Promocionado" in texto_item: # Promocionado suele ser de grandes vendedores
+                # B. PLATINUM (LÓGICA CORREGIDA)
+                # Buscamos en el HTML interno, no solo en el texto visible.
+                # Esto detecta clases, atributos alt e íconos ocultos.
+                html_tarjeta = item.get_attribute("innerHTML")
+                
+                # Buscamos variaciones comunes de la marca Platinum
+                if "platinum" in html_tarjeta.lower() or "brand_filter" in html_tarjeta:
                     conteo_platinum += 1
                 
-                # C. Guardamos URL del primer orgánico para Deep Dive
-                if i == 0: # El primero de la lista
+                # C. URL para Deep Dive
+                if i == 0:
                     try:
                         link_elem = item.find_element(By.TAG_NAME, "a")
                         url_primer_producto = link_elem.get_attribute("href")
@@ -203,19 +196,17 @@ def analizar_categoria(tendencia):
                     
             except: continue
         
-        # Cálculo de Métricas
+        # Métricas
         precio_promedio = sum(precios_muestra) / len(precios_muestra) if precios_muestra else 0
-        
-        # Saturación Real
         pct_platinum = (conteo_platinum / len(items_muestra)) * 100 if items_muestra else 0
-        print(f"      🏆 Saturación Platinum detectada: {pct_platinum}%")
+        
+        print(f"      🏆 Platinum Detectados en muestra: {conteo_platinum}/{len(items_muestra)} ({pct_platinum}%)")
 
-        # 3. Sentiment Real (Deep Dive)
+        # 3. Sentiment Real
         rating_real = 0.0
         if url_primer_producto:
             rating_real = obtener_detalle_producto(driver, url_primer_producto)
             
-        # Mapeo de Rating a Sentiment Label
         if rating_real >= 4.5: sent_label = "Excelente (4.5+)"
         elif rating_real >= 4.0: sent_label = "Bueno (4.0+)"
         elif rating_real > 0: sent_label = "Regular"
@@ -226,7 +217,7 @@ def analizar_categoria(tendencia):
             "competencia_cantidad": total_resultados,
             "precio_promedio": round(precio_promedio, 2),
             "porcentaje_platinum": round(pct_platinum, 1),
-            "sentimiento_score": rating_real, # Guardamos el rating real (ej: 4.7)
+            "sentimiento_score": rating_real,
             "sentimiento_label": sent_label,
             "cant_preguntas_analizadas": 1 
         }
@@ -239,27 +230,25 @@ def analizar_categoria(tendencia):
     return datos_consolidados
 
 # ==============================================================================
-# SCORING Y ORQUESTACIÓN
+# SCORING
 # ==============================================================================
 
 def calcular_opportunity_score(row):
-    """
-    Calcula un puntaje de 0 a 100 basado en métricas clave.
-    """
-    # 1. Factor Competencia (Inverso): Menos es mejor.
-    # Si hay > 10,000 items, el factor baja.
-    comp = row['competencia_cantidad']
-    if comp == 0: score_comp = 50
-    else: score_comp = max(0, 100 - (math.log10(comp) * 20)) # Escala logarítmica para suavizar números grandes
+    # Normalización para que el score sea legible (0-100)
     
-    # 2. Factor Barrera (Platinum): Menos es mejor.
+    # Competencia: Si hay >50.000 items, es muy difícil (0 puntos)
+    # Si hay <1.000, es fácil (100 puntos)
+    comp = row['competencia_cantidad']
+    score_comp = max(0, 100 - (comp / 500)) # Decae rápido con mucha competencia
+    
+    # Platinum: Si hay 100% platinum, score es 0.
     score_plat = 100 - row['porcentaje_platinum']
     
-    # 3. Factor Demanda (Ranking): Menor ranking (1º) es mejor.
-    score_rank = (6 - row['ranking_tendencia']) * 20 # 1º=100, 5º=20
+    # Ranking: 1º lugar vale más
+    score_rank = (6 - row['ranking_tendencia']) * 20
     
-    # Promedio ponderado
-    final_score = (score_comp * 0.3) + (score_plat * 0.4) + (score_rank * 0.3)
+    # Ponderación: Le damos mucho peso a que NO haya Platinum (oportunidad para entrar)
+    final_score = (score_comp * 0.2) + (score_plat * 0.6) + (score_rank * 0.2)
     return round(final_score, 1)
 
 def generar_reporte_oportunidades():
@@ -280,7 +269,6 @@ def generar_reporte_oportunidades():
     df_final = pd.DataFrame(resultados)
     
     if not df_final.empty:
-        # Aplicamos el nuevo algoritmo de scoring
         df_final['opportunity_score'] = df_final.apply(calcular_opportunity_score, axis=1)
     
     return df_final
