@@ -11,12 +11,12 @@ from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
 
 # ==============================================================================
-# MÓDULO DE INGENIERÍA DE DATOS: AUDITORÍA PROFUNDA (V8)
+# MÓDULO DE INGENIERÍA DE DATOS: VISUAL WEB SCRAPING (V9 - FIX SELECTORES)
 # ------------------------------------------------------------------------------
-# ESTRATEGIA: "FULL DEEP DIVE"
-# En lugar de estimar datos desde el listado de búsqueda (que puede ocultar info),
-# el script navega individualmente a las fichas de los productos top para
-# auditar sus credenciales (Platinum, Tienda Oficial) con certeza absoluta.
+# CORRECCIÓN DE ERROR CRÍTICO:
+# - Se han actualizado los selectores CSS/XPath para detectar productos tanto en
+#   "Vista de Lista" como en "Vista de Grilla" (Grid).
+# - Se garantiza la entrada a las fichas de producto para la auditoría de Platinum.
 # ==============================================================================
 
 BLACKLIST_SISTEMA = [
@@ -34,10 +34,14 @@ def iniciar_navegador_controlado():
     options.add_experimental_option("excludeSwitches", ["enable-automation"])
     options.add_experimental_option('useAutomationExtension', False)
     
+    # User-Agent rotativo simple para evitar patrones fijos
+    ua_mac = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    ua_win = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    
     if sistema_operativo == "Windows":
-        options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        options.add_argument(f"user-agent={ua_win}")
     else:
-        options.add_argument("user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        options.add_argument(f"user-agent={ua_mac}")
 
     try:
         if sistema_operativo == "Darwin":
@@ -52,7 +56,7 @@ def iniciar_navegador_controlado():
         return None
 
 # ==============================================================================
-# FASE 1: DISCOVERY (Igual que antes)
+# FASE 1: DISCOVERY (Igual, funciona bien)
 # ==============================================================================
 
 def obtener_categorias_populares(limit=5):
@@ -69,7 +73,6 @@ def obtener_categorias_populares(limit=5):
         print("   ✋ [Espera] 8s para renderizado visual...")
         time.sleep(8) 
         
-        print("   👀 [Visual] Buscando etiquetas 'MÁS POPULAR'...")
         badges_populares = driver.find_elements(By.XPATH, "//*[contains(text(), 'MÁS POPULAR')]")
         
         elementos_candidatos = []
@@ -79,10 +82,12 @@ def obtener_categorias_populares(limit=5):
         else:
             for badge in badges_populares:
                 try:
+                    # Intentamos navegar hacia arriba para encontrar el link contenedor
                     card = badge.find_element(By.XPATH, "./ancestor::div[contains(@class, 'card') or contains(@class, 'module')]//a")
                     elementos_candidatos.append(card)
                 except:
                     try:
+                        # Si no es contenedor, buscamos el hermano
                         link = badge.find_element(By.XPATH, "./following::a[1]")
                         elementos_candidatos.append(link)
                     except: pass
@@ -116,44 +121,39 @@ def obtener_categorias_populares(limit=5):
         return pd.DataFrame()
 
 # ==============================================================================
-# FASE 2: AUDITORÍA PROFUNDA (DEEP DIVE)
+# FASE 2: AUDITORÍA PROFUNDA (CORREGIDA)
 # ==============================================================================
 
 def auditar_producto(driver, url_producto):
     """
-    Navega a la ficha del producto y extrae: Precio, Rating y Estatus Platinum.
+    Navega a la ficha del producto y extrae datos reales.
     """
     try:
         driver.get(url_producto)
-        time.sleep(2) # Espera rápida
+        time.sleep(2) 
         
-        # 1. Detección de Platinum / Tienda Oficial
-        # Buscamos en todo el texto visible de la página para asegurar precisión
-        page_text = driver.find_element(By.TAG_NAME, "body").text.lower()
         page_source = driver.page_source.lower()
         
+        # 1. DETECCIÓN PLATINUM/OFICIAL (Búsqueda en código fuente)
         es_platinum = False
-        
-        # Criterios estrictos basados en tu observación
-        if "mercadolíder platinum" in page_text:
-            es_platinum = True
-        elif "tienda oficial" in page_text and "ver más datos de" not in page_text: 
-            # A veces dice "Ver más datos de Tienda Oficial X" en productos que no lo son, cuidado.
-            # Pero generalmente "Tienda oficial" arriba a la derecha es válido.
-            es_platinum = True
-        elif "platinum" in page_source: # Búsqueda en código fuente (clases CSS o atributos alt)
-            es_platinum = True
+        if "mercadolíder platinum" in page_source: es_platinum = True
+        if "tienda oficial" in page_source: es_platinum = True
+        if "seller-info__medal" in page_source: es_platinum = True # Clase común de la medalla
             
-        # 2. Precio
+        # 2. PRECIO REAL (Meta tags son más seguros)
         precio = 0.0
         try:
-            # Buscamos el meta tag de precio que es más limpio
+            # Intentamos varias estrategias de precio
             meta_price = driver.find_element(By.CSS_SELECTOR, "meta[itemprop='price']")
             precio = float(meta_price.get_attribute("content"))
         except:
-            pass # Si falla, no importa, es secundario
+            try:
+                # Fallback visual
+                price_elem = driver.find_element(By.CSS_SELECTOR, ".ui-pdp-price__second-line .andes-money-amount__fraction")
+                precio = float(price_elem.text.replace(".", ""))
+            except: pass
             
-        # 3. Rating
+        # 3. RATING REAL
         rating = 0.0
         try:
             rating_elem = driver.find_element(By.CLASS_NAME, "ui-pdp-review__rating")
@@ -167,6 +167,7 @@ def auditar_producto(driver, url_producto):
         }
 
     except Exception as e:
+        # print(f"Error auditando item: {e}") # Debug off para limpieza
         return None
 
 def analizar_categoria(tendencia):
@@ -179,35 +180,48 @@ def analizar_categoria(tendencia):
     datos_consolidados = None
     
     try:
-        print(f"   🔎 [Auditoría] Ingresando a categoría: {keyword}...")
+        print(f"   🔎 [Sampling] Analizando listado de: {keyword}...")
         driver.get(url_categoria)
-        time.sleep(4) 
+        time.sleep(5) 
         
-        # 1. Volumen Total (Contador)
+        # 1. Volumen Total
         total_resultados = 0
         try:
             qty_elem = driver.find_element(By.CLASS_NAME, "ui-search-search-result__quantity-results")
             texto_qty = qty_elem.text.replace(".", "").replace(" resultados", "").strip()
             total_resultados = int(texto_qty) if texto_qty.isdigit() else 0
-            print(f"      📊 Competencia Total: {total_resultados}")
         except:
-            total_resultados = 1000 # Default si no se puede leer
+            # Conteo de elementos visuales si falla el texto
+            total_resultados = len(driver.find_elements(By.CLASS_NAME, "ui-search-layout__item"))
 
-        # 2. Captura de Links para Auditoría (Top 5 Orgánicos)
-        # Ignoramos los patrocinados ("Ads") si es posible, aunque ML los mezcla.
-        items = driver.find_elements(By.CSS_SELECTOR, "li.ui-search-layout__item a.ui-search-link")
+        # 2. CAPTURA DE LINKS (ESTRATEGIA UNIVERSAL)
+        # Aquí estaba el fallo: Buscamos links en Grid Y en Lista
         
-        # Filtramos duplicados y nos quedamos con los primeros 5 únicos
+        # Selectores posibles para ítems de producto
+        selectores_items = [
+            "//li[contains(@class, 'ui-search-layout__item')]//a[contains(@class, 'ui-search-link')]", # Lista estándar
+            "//div[contains(@class, 'ui-search-result__wrapper')]//a[contains(@class, 'ui-search-link')]", # Grid/Mosaico
+            "//ol//li//a[contains(@class, 'ui-search-item__group__element')]" # Variante antigua
+        ]
+        
         urls_a_auditar = []
-        seen_urls = set()
-        for item in items:
-            href = item.get_attribute("href")
-            if href and "mercadolibre" in href and href not in seen_urls:
-                urls_a_auditar.append(href)
-                seen_urls.add(href)
-            if len(urls_a_auditar) >= 5: break
+        
+        for xpath in selectores_items:
+            elementos = driver.find_elements(By.XPATH, xpath)
+            if elementos:
+                print(f"      🔹 Encontrados {len(elementos)} productos con selector: {xpath}")
+                for elem in elementos:
+                    url = elem.get_attribute("href")
+                    if url and "mercadolibre" in url and "click" not in url: # Evitar trackers raros
+                        if url not in urls_a_auditar:
+                            urls_a_auditar.append(url)
             
-        print(f"      🕵️ Auditando {len(urls_a_auditar)} productos líderes uno por uno...")
+            if len(urls_a_auditar) >= 5: break # Ya tenemos suficientes para la muestra
+        
+        # Limitamos a 5 para la demo (puedes subirlo a 10 si quieres más precisión)
+        urls_a_auditar = urls_a_auditar[:5]
+        
+        print(f"      🕵️ Auditando {len(urls_a_auditar)} productos líderes...")
         
         precios = []
         ratings = []
@@ -220,13 +234,12 @@ def analizar_categoria(tendencia):
                 if datos_prod['rating'] > 0: ratings.append(datos_prod['rating'])
                 if datos_prod['es_platinum']: platinums_encontrados += 1
         
-        # Consolidación de Métricas
+        # Métricas Finales
         precio_promedio = sum(precios) / len(precios) if precios else 0
         rating_promedio = sum(ratings) / len(ratings) if ratings else 0
-        
-        # Cálculo real de saturación
         pct_platinum = (platinums_encontrados / len(urls_a_auditar)) * 100 if urls_a_auditar else 0
-        print(f"      🏆 Resultado Auditoría: {pct_platinum}% son Platinum/Oficiales")
+        
+        print(f"      🏆 Resultado: Precio Prom ${precio_promedio:.0f} | Platinum {pct_platinum}% | Rating {rating_promedio}")
 
         # Label de Sentimiento
         if rating_promedio >= 4.5: sent_label = "Excelente (4.5+)"
@@ -245,7 +258,7 @@ def analizar_categoria(tendencia):
         }
                 
     except Exception as e:
-        print(f"   ❌ Error en auditoría: {e}")
+        print(f"   ❌ Error analizando categoría '{keyword}': {e}")
     finally:
         if driver: driver.quit()
         
@@ -258,15 +271,12 @@ def analizar_categoria(tendencia):
 def calcular_opportunity_score(row):
     comp = row['competencia_cantidad']
     
-    # Lógica de Scoring ajustada
     if comp < 1000: score_comp = 100
     elif comp < 10000: score_comp = 70
     elif comp < 50000: score_comp = 40
     else: score_comp = 10
     
-    # Si hay mucho platinum, es difícil entrar -> Score baja
     score_plat = 100 - row['porcentaje_platinum']
-    
     score_rank = (6 - row['ranking_tendencia']) * 20
     
     final_score = (score_comp * 0.25) + (score_plat * 0.55) + (score_rank * 0.2)
